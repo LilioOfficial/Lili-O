@@ -1,0 +1,64 @@
+# Clean Server Architecture for Real-time Transcription & Diarization
+
+This project provides a modular and clean implementation of a real-time audio processing server using `aiohttp`. It integrates:
+
+- Real-time audio transcription (Moshi)
+- Speaker diarization (DIART / PyAnnote)
+- Reactive pipelines (RxPY)
+- WebSocket interface
+- Modular design for scalability and maintenance
+
+---
+
+## 🧱 Project Structure
+
+```
+project_root/
+├── main.py               
+├── pipelines.py    # Reactive pipelines for audio processing
+├── serverState.py # Core server state management
+└── utils.py # Utility functions
+
+├── static/             # Optional UI assets (served by aiohttp)
+│
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone & Install
+```bash
+git clone <repo_url>
+pip install -r requirements.txt
+```
+
+### 2. Run the Server
+```bash
+python -m main
+```
+
+
+## 🛠️ Key Components
+
+- `ServerState` handles:
+  - Stream reading (Opus → PCM)
+  - Model inference (MIMI + Moshi)
+  - Reactive pipelines for diarization and transcription
+
+- RxPY operators chain streaming audio into async pipelines
+
+- Pyannote and Diart is used for speaker diarization in parallel
+
+
+## ✅ TODOs
+- [ ] Add segmentation and embedding path to configuration and model loading.
+
+---
+
+## 👥 Authors & License
+
+- **Author**: [Ludovic Maitre]
+MIT License - 2025
