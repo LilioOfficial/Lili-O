@@ -5,7 +5,7 @@ import torch
 from rx import operators as ops
 from utils import AudioChunk, ProcessedTokens, TimestampedText
 from moshi.client_utils import log
-from utils import tokens_to_timestamped_text
+from utils import tokens_to_timestamped_text, FactCheckingModel
 import rx
 from moshi.models import LMModel, MimiModel, LMGen
 import sentencepiece
@@ -14,8 +14,10 @@ from diart import blocks
 from pyannote.core import SlidingWindowFeature, Annotation
 from diart import SpeakerDiarization, SpeakerDiarizationConfig
 from diart.models import SegmentationModel
-
 import diart.operators as dops
+from prompt import prompt_connaissance
+import time
+from collections import deque
 
 
 class Pipeline(ABC):
@@ -34,7 +36,7 @@ class Pipeline(ABC):
         pass
 
 class ASRPipeline(Pipeline):
-    def __init__(self, mimi: MimiModel, text_tokenizer: sentencepiece.SentencePieceProcessor,
+    def __init__(self, model_name : str, mimi: MimiModel, text_tokenizer: sentencepiece.SentencePieceProcessor,
                  lm: LMModel, audio_delay_seconds, padding_token_id, audio_silence_prefix_seconds, device: str | torch.device):
         self.mimi = mimi
         self.text_tokenizer = text_tokenizer
@@ -50,6 +52,10 @@ class ASRPipeline(Pipeline):
         self.n_prefix_chunks = math.ceil(self.audio_silence_prefix_seconds * mimi.frame_rate)
         self.text_tokens_accum = []
         self.transcription = []
+        self.model = FactCheckingModel(model_name)
+        self.time = time.time()
+        self.queue = deque(maxlen=10)  # Use deque for efficient FIFO queue
+
 
     def reset(self):
         self.mimi.reset_streaming()
@@ -112,24 +118,51 @@ class ASRPipeline(Pipeline):
                 padding_token_id=self.padding_token_id,
                 offset_seconds=int(self.n_prefix_chunks / self.mimi.frame_rate) + self.audio_delay_seconds,
             )
-            log("info", f"Processed tokens into timed text: {timed_text}")
+            # log("info", f"Processed tokens into timed text: {timed_text}")
             return timed_text
+        
         except Exception as e:
             log("error", f"Error processing tokens: {e}")
             return []
+        
+    async def generate_text(self, prompt, ws):
+        print(f"Generating text with prompt: {prompt[1]}")
+        res = self.model.call(prompt)
+        # res = res[0]["generated_text"][-1]
+        log("info", f"Generated text: {res}")
+        msg = b"\x02" + bytes(res, encoding="utf8")
+        await ws.send_bytes(msg)
+        return res
+    
+    def build_prompt(self, ws,loop, timed_text: List[TimestampedText]):
+        """Build the prompt from the dialogue history"""
+        if len(timed_text) <= len(self.transcription) or len(timed_text) <= 1:
+            return
+        text = timed_text[len(self.transcription):-1]  # Exclude the last item
+        self.transcription.extend(text)
+        text = " ".join([str(m.text) for m in text])
+        if len(text) == 0:
+            return
+        self.queue.append(text)
+        if len(self.queue)>= self.queue.maxlen:
+            old_text = " ".join(self.queue)
+            self.queue.clear()
+            print(f"{len(self.queue)} items in queue after pop")
+            message = [{"role" : "system", "content" : prompt_connaissance},{"role": "user", "content": old_text}]
+            asyncio.run_coroutine_threadsafe(self.generate_text(message,ws), loop)
 
     def send_transcription_sync(self, ws, loop, timed_text: List[TimestampedText]):
         """Send new transcription to websocket - sync wrapper"""
         try:
             if len(timed_text) > len(self.transcription) and len(timed_text) > 1:
-                print(f"Sending transcription: {len(timed_text)} items, current length: {len(self.transcription)}")
                 missing_text = timed_text[len(self.transcription):-1]
-                log("warning", f"Sending {len(missing_text)} new transcription items")
                 self.transcription.extend(missing_text)
                 _text = " ".join([str(m) for m in missing_text])
                 _text += " "
+                #find a keyword like Lili-O
+                if "milio" in _text.lower():
+                    log("info", "Found keyword 'milio' in transcription, sending message")
                 msg = b"\x02" + bytes(_text, encoding="utf8")
-                
                 # Schedule the async send operation
                 asyncio.run_coroutine_threadsafe(ws.send_bytes(msg), loop)
                 
@@ -149,8 +182,10 @@ class ASRPipeline(Pipeline):
                 ops.map(self.process_tokens),
                 # Filter out empty results
                 ops.filter(lambda x: len(x) > 0),
+                # ops.flat_map(lambda x: rx.from_future(await asyncio.sleep(0.5, result=x))),
+
                 # Send transcription asynchronously
-                ops.do_action(lambda x: self.send_transcription_sync(ws, loop, x)),
+                ops.do_action(lambda x: self.build_prompt(ws, loop, x)),
                 # Handle errors gracefully
                 ops.catch(lambda e, source: rx.empty().pipe(
                     ops.do_action(lambda _: log("error", f"Pipeline error: {e}"))

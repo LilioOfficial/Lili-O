@@ -52,6 +52,7 @@ class ServerState:
         self.audio_subject = Subject()
         self.lock = asyncio.Lock()
         self.audioPipeline = ASRPipeline(
+            model_name="Qwen/Qwen3-8B",
             mimi=mimi,
             text_tokenizer=text_tokenizer,
             lm=lm,
@@ -62,9 +63,9 @@ class ServerState:
         )
 
         self.diarization_subject = Subject()
-        self.diarizationPipeline = DiarPipeline()
+        # self.diarizationPipeline = DiarPipeline()
         self.schedulerASR = AsyncIOScheduler(asyncio.get_event_loop())
-        self.schedulerDiar = AsyncIOScheduler(asyncio.get_event_loop())
+        # self.schedulerDiar = AsyncIOScheduler(asyncio.get_event_loop())
 
     
       
@@ -139,8 +140,8 @@ class ServerState:
                             vad_threshold = 1e-2  # You can adjust this
                             energy = np.sqrt(np.mean(chunk ** 2))
 
-                            if energy > vad_threshold:
-                                self.diarization_subject.on_next(chunk.reshape(1, -1))
+                            # if energy > vad_threshold:
+                            #     self.diarization_subject.on_next(chunk.reshape(1, -1))
 
                             
                 except Exception as e:
@@ -169,14 +170,14 @@ class ServerState:
                 scheduler=self.schedulerASR
             )
 
-            # ⏺ Créer et souscrire au pipeline de diarisation
-            diarization_pipeline = self.diarizationPipeline.create_pipeline(ws, loop=event, subject=self.diarization_subject)
-            diarization_subscription = diarization_pipeline.subscribe(
-                on_next=lambda task: log("info", f"diarization done"),
-                on_error=lambda e: log("error", f"Diarization subscription error: {e}"),
-                on_completed=lambda: log("info", "Diarization completed"),
-                scheduler=self.schedulerDiar
-            )
+            # # ⏺ Créer et souscrire au pipeline de diarisation
+            # diarization_pipeline = self.diarizationPipeline.create_pipeline(ws, loop=event, subject=self.diarization_subject)
+            # diarization_subscription = diarization_pipeline.subscribe(
+            #     on_next=lambda task: log("info", f"diarization done"),
+            #     on_error=lambda e: log("error", f"Diarization subscription error: {e}"),
+            #     on_completed=lambda: log("info", "Diarization completed"),
+            #     scheduler=self.schedulerDiar
+            # )
 
 
             # 🤝 Envoyer le handshake
@@ -188,6 +189,6 @@ class ServerState:
             finally:
                 close = True
                 subscription.dispose()
-                diarization_subscription.dispose()
+                # diarization_subscription.dispose()
             return ws
 
