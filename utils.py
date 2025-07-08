@@ -2,6 +2,8 @@ import torch
 from dataclasses import dataclass
 import numpy as np
 import torch
+from abc import ABC
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 @dataclass
 class TimestampedText:
@@ -53,8 +55,7 @@ def tokens_to_timestamped_text(
             end = end.type(torch.int64).item()
         text = _decode(text_tokens[start:end])
         words_inside_segment = text.split()
-
-
+        
         if len(words_inside_segment) == 0:
             return
         if len(words_inside_segment) == 1:
@@ -98,3 +99,50 @@ def tokens_to_timestamped_text(
         last_segment_end = last_segment_start + end_of_last_segment[0]
     _decode_segment(last_segment_start, last_segment_end)
     return sequence_timestamps
+
+
+class FactCheckingModel(ABC) : 
+    def __init__(self, model_name):
+        
+        # 4-bit quantization config
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",           # Recommended for LLMs
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True
+        )
+
+
+        # load the tokenizer and the model
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            device_map="auto",
+            quantization_config=bnb_config
+        )
+
+    
+    def call(self, messages):
+        text = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
+        )
+        model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        # conduct text completion
+        generated_ids = self.model.generate(
+            **model_inputs,
+            max_new_tokens=32768
+        )
+        output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+        # parsing thinking content
+        try:
+            # rindex finding 151668 (</think>)
+            index = len(output_ids) - output_ids[::-1].index(151668)
+        except ValueError:
+            index = 0
+        # thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+        content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+        # print("thinking content:", thinking_content)
+        return content
