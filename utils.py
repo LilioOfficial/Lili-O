@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from abc import ABC
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import websocket
 
 @dataclass
 class TimestampedText:
@@ -100,8 +101,40 @@ def tokens_to_timestamped_text(
     _decode_segment(last_segment_start, last_segment_end)
     return sequence_timestamps
 
+import asyncio
+from typing import Callable, Awaitable, Any, Dict
+from fastapi import WebSocket as websocket
+from typing import List
+import json
+class MapQueue:
+    def __init__(self):
+        self.queues: Dict[str, List[websocket]] = {}
+    
+    async def send_message(self, key: str, message : dict):
+        if key not in self.queues:
+            return
+        print(f"Sending message to ${len(self.queues[key])} webSockets for key: {key}")
+        for webSocket in self.queues[key]:
+            print(f"Sending message to {key}: {message}")
+            await webSocket.send_text(json.dumps(message))
 
-class FactCheckingModel(ABC) : 
+
+    def enqueue(self, key: str, webSocket: websocket):
+        if key not in self.queues:
+            self.queues[key] = [webSocket]
+        else:
+            self.queues[key].append(webSocket)
+
+    def dequeue(self, key: str, webSocket: websocket):
+        if key in self.queues and webSocket in self.queues[key]:
+            self.queues[key].remove(webSocket)
+            if not self.queues[key]:
+                del self.queues[key]
+    
+
+
+@dataclass
+class FactCheckingModel() : 
     def __init__(self, model_name):
         
         # 4-bit quantization config
