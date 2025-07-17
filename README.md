@@ -1,15 +1,11 @@
 # Overview
-# Lili-O Project
 
 This project implements a real-time agent for multi-speaker environments based on an architecture we developed.
 
 ## Architecture
 
-*(Add a brief description of the architecture here)*
+You can find our architecture diagram in the [doc](https://github.com/LilioOfficial/realtime-multi-speaker-interaction/doc) folder. The architecture is designed to handle multiple speakers in a meeting environment, allowing for real-time interaction and processing.
 
-## Use Cases
-
-*(List the use cases for the project here)*
 
 ## Quickstart / Installation
 
@@ -50,8 +46,9 @@ python main.py --mode meeting --port XXXX --host XXX.X.X.X
 ```
 
 ## Roadmap
-
-- [ ] Implement the turn-taking model using Mili-O 
+- [x] Implement real time diar / ASR pipeline
+- [ ] Implement the Lili model using the Transformer architecture
+- [ ] Implement the turn-taking model using Mili-
 
 ## License and Credits
 
