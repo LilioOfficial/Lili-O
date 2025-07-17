@@ -4,7 +4,7 @@ This project implements a real-time agent for multi-speaker environments based o
 
 ## Architecture
 
-You can find our architecture diagram in the [doc](https://github.com/LilioOfficial/realtime-multi-speaker-interaction/doc) folder. The architecture is designed to handle multiple speakers in a meeting environment, allowing for real-time interaction and processing.
+You can find our architecture diagram in the [doc](https://github.com/LilioOfficial/realtime-multi-speaker-interaction/tree/master/doc) folder. The architecture is designed to handle multiple speakers in a meeting environment, allowing for real-time interaction and processing.
 
 
 ## Quickstart / Installation
