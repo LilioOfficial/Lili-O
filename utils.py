@@ -1,3 +1,5 @@
+from huggingface_hub import WebhookInfo
+from regex import D
 import torch
 from dataclasses import dataclass
 import numpy as np
@@ -106,32 +108,84 @@ from typing import Callable, Awaitable, Any, Dict
 from fastapi import WebSocket as websocket
 from typing import List
 import json
-class MapQueue:
-    def __init__(self):
-        self.queues: Dict[str, List[websocket]] = {}
+
+
+@dataclass
+class WebSocketHistory:
+    key: str
+    webSocket: List[websocket]
+    history: List
+
+    def __init__(self, key: str):
+        self.key = key
+        self.webSocket = []
+        self.history = []
+
+    def add_message(self, message: str):
+        self.history.append(message)
+    
+    async def send_message(self, message: str):
+        if not self.webSocket:
+            print(f"No WebSocket connections for key: {self.key}")
+            return
+
+        for ws in self.webSocket:
+            asyncio.create_task(ws.send_text(message))
+
+    def add_webSocket(self, webSocket: websocket):
+        if webSocket not in self.webSocket:
+            self.webSocket.append(webSocket)
+        else:
+            print(f"WebSocket already exists in the history for key: {self.key}")
+
+    def get_history(self) -> List:
+        return self.history
+    
+    def remove_webSocket(self, webSocket: websocket):
+        if webSocket in self.webSocket:
+            self.webSocket.remove(webSocket)
+        else:
+            print(f"WebSocket not found in the history for key: {self.key}")
+
+
+class DictWebSocketQueue:
+    queues: Dict[str, WebSocketHistory]
+
+    def __init__(self, key: str = None):
+        self.queues: Dict[str, WebSocketHistory] = {key: WebSocketHistory(key)} if key else {}
+
+    def add_key(self, key: str):
+        if key not in self.queues:
+            self.queues[key] = WebSocketHistory(key)
+        else:
+            print(f"Key {key} already exists in the queue.")
     
     async def send_message(self, key: str, message : dict):
-        if key not in self.queues:
-            return
-        print(f"Sending message to ${len(self.queues[key])} webSockets for key: {key}")
-        for webSocket in self.queues[key]:
-            print(f"Sending message to {key}: {message}")
-            await webSocket.send_text(json.dumps(message))
-
-
-    def enqueue(self, key: str, webSocket: websocket):
-        if key not in self.queues:
-            self.queues[key] = [webSocket]
+        if key in self.queues:
+            history = self.queues[key]
+            await history.send_message(json.dumps(message))
         else:
-            self.queues[key].append(webSocket)
+            print(f"Key {key} not found in the queue.")
 
-    def dequeue(self, key: str, webSocket: websocket):
-        if key in self.queues and webSocket in self.queues[key]:
-            self.queues[key].remove(webSocket)
-            if not self.queues[key]:
-                del self.queues[key]
+    def add_websocket(self, key: str, webSocket: websocket):
+        if key not in self.queues:
+            self.add_key(key)
+        self.queues[key].add_webSocket(webSocket)
+
+    def remove_websocket(self, key: str, webSocket: websocket):
+        if key in self.queues:
+            self.queues[key].remove_webSocket(webSocket)
+        else:
+            print(f"Key {key} not found in the queue.")
+
+    def get_history (self, key: str) -> List:
+        if key in self.queues:
+            return self.queues[key].get_history()
+        else:
+            print(f"Key {key} not found in the queue.")
+            return []
     
-
+    
 
 @dataclass
 class FactCheckingModel() : 
@@ -179,3 +233,12 @@ class FactCheckingModel() :
         content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
         # print("thinking content:", thinking_content)
         return content
+    
+
+def build_message_to_server(title : str, content : str, priority:str, fullDescription: str):
+    return {
+        "title": title,
+        "content": content,
+        "priority": priority,
+        "fullDescription": fullDescription
+    }

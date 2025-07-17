@@ -4,12 +4,10 @@
 
 import argparse
 from dataclasses import dataclass
-from http import client
-import inspect
 import random
 import os
-from pathlib import Path
 import sys
+from time import sleep
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -19,11 +17,13 @@ import torch
 import asyncio
 from moshi.client_utils import log
 from moshi.models import loaders
+from fastapi.middleware.cors import CORSMiddleware
+
 
 # RxPY imports
 import numpy as np
 from serverState import OnlineServerState, OfflineServerState, MeetingServerState
-from utils import MapQueue
+from utils import DictWebSocketQueue
 
 def seed_all(seed):
     """Set random seeds for reproducibility"""
@@ -42,7 +42,15 @@ import json
 def create_app(server_state):
     """Create and configure the FastAPI application"""
     app = FastAPI(title="Audio Transcription Server")
-    app.state.frontend_clients = MapQueue()
+    app.state.frontend_clients = DictWebSocketQueue()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["chrome-extension://oidgmmmmdnkggpcolpbcckipoodendac"],  # ID de ton extension
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
     @app.websocket("/ws/frontend")
@@ -50,12 +58,11 @@ def create_app(server_state):
         await websocket.accept()
         frontend_clients = websocket.app.state.frontend_clients
         print("🌐 Frontend connected")
-        handshake_response = {"event": "handshake", "status": "ready", "name": name}
+        handshake_response = {"title": "handshake", "content": "ready", "fullDescription": name}
         await websocket.send_text(json.dumps(handshake_response))
-        frontend_clients.enqueue(
-            name,
-            websocket,
-        )
+        #just test
+        frontend_clients.add_key(name)
+        frontend_clients.add_websocket(name, websocket)
         try:
             while True:
                 await websocket.receive_text()  # could be ping or noop
@@ -67,22 +74,34 @@ def create_app(server_state):
     async def websocket_endpoint(websocket: WebSocket):
         """WebSocket endpoint for audio transcription"""
         await websocket.accept()
-        frontend_clients = websocket.app.state.frontend_clients
-        # websocket.app.state.frontend_clients.enqueue(
-        #     "api.chat",
-        #     websocket,
-        # )
-        
+        frontend_clients : DictWebSocketQueue = websocket.app.state.frontend_clients
+        frontend_clients.add_key(
+            "moshi",
+        )
+        frontend_clients.add_websocket("moshi", websocket)
         # Use the server state's handle_chat method adapted for FastAPI
-        await server_state.handle_chat_fastapi(websocket, key="api.chat", clients=frontend_clients )
+        await server_state.handle_chat_fastapi(websocket, key="moshi", clients=frontend_clients )
     
     @app.websocket("/ws")
-    async def websocket_endpoint(websocket: WebSocket):
+    async def websocket_endpoint(websocket: WebSocket, url: str = None):
         """WebSocket endpoint for audio transcription"""
         await websocket.accept()
-        
+        frontend_clients = websocket.app.state.frontend_clients
+        frontend_clients.add_key(url)
         # Use the server state's handle_chat method adapted for FastAPI
-        await server_state.handle_chat_fastapi(websocket, clients=app.state.frontend_clients)
+        await server_state.handle_chat_fastapi(websocket, key=url, clients=frontend_clients)
+
+    
+    @app.get("/api/prompt")
+    def websocket_endpoint(url: str = None):
+        """WebSocket endpoint for audio transcription"""
+        print(f"Getting prompt for URL: {url}")
+        abc =  server_state.get_prompt(url)
+        if abc is None:
+            return {"error": "No prompt found for the given URL"}
+        return {"prompt": abc}
+
+
     
     @app.get("/")
     async def read_root():
@@ -195,6 +214,7 @@ async def run_online_mode(args, server_state):
         "port": args.port,
         "log_level": "info",
         "access_log": True,
+        "reload": True,
     }
     
     # Add SSL configuration if provided

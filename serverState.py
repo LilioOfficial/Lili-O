@@ -23,7 +23,7 @@ from moshi.client_utils import log
 # Custom imports
 import numpy as np
 from pipelines import ASRPipeline
-from utils import AudioChunk, MapQueue
+from utils import AudioChunk, DictWebSocketQueue
 import base64
 from scipy import signal
 
@@ -93,7 +93,7 @@ class BaseServerState(ABC):
         )
     
     @abstractmethod
-    async def handle_chat_fastapi(self, websocket: WebSocket, clients: MapQueue):
+    async def handle_chat_fastapi(self, websocket: WebSocket, clients: DictWebSocketQueue):
         """Handle FastAPI WebSocket connections - must be implemented by subclasses"""
         pass
 
@@ -112,7 +112,11 @@ class OnlineServerState(BaseServerState):
         self.schedulerASR = AsyncIOScheduler(asyncio.get_event_loop())
         self.diarization_subject = Subject()
     
-    async def handle_chat_fastapi(self, websocket: WebSocket, key :str,  clients: MapQueue):
+    def get_prompt(self, key: str) -> Optional[str]:
+        """Get the prompt for the given key, if available"""
+        return self.audioPipeline.generate_text(key, is_get=True)
+    
+    async def handle_chat_fastapi(self, websocket: WebSocket, key :str,  clients: DictWebSocketQueue):
         """FastAPI WebSocket handler for binary audio data"""
         event_loop = asyncio.get_running_loop()
         close = False
@@ -169,10 +173,9 @@ class OnlineServerState(BaseServerState):
                         # Create and send audio chunk
                         audio_chunk = self._create_audio_chunk(chunk, time.time())
                         if audio_chunk is not None:
+                            log("info", f"Sending audio chunk of size {len(audio_chunk.data)}")
                             self.audio_subject.on_next(audio_chunk)
-                            
-                            # Optional VAD calculation
-                            energy = self._calculate_energy(chunk)
+
                             
                 except Exception as e:
                     if not close:
@@ -188,7 +191,7 @@ class OnlineServerState(BaseServerState):
             # Create and subscribe to transcription pipeline
             pipeline = self.audioPipeline.create_pipeline(
                 key=key,
-                mapQueue=clients,
+                dictWebSocketQueue=clients,
                 loop=event_loop,
                 subject=self.audio_subject,
             )
@@ -233,7 +236,7 @@ class OfflineServerState(BaseServerState):
         """Warmup the model"""
         self.audioPipeline.warmup()
         
-    async def handle_chat_fastapi(self, websocket: WebSocket, clients: Optional[MapQueue] = None):
+    async def handle_chat_fastapi(self, websocket: WebSocket, clients: Optional[DictWebSocketQueue] = None):
         """Not applicable for offline processing"""
         raise NotImplementedError("Offline processing doesn't support WebSocket connections")
         
@@ -363,7 +366,7 @@ class MeetingServerState(BaseServerState):
         self.diarization_subject = Subject()
         self.pcm_buffer = np.array([], dtype=np.float32)
 
-    async def handle_chat_fastapi(self, websocket: WebSocket, clients: MapQueue):
+    async def handle_chat_fastapi(self, websocket: WebSocket, clients: DictWebSocketQueue, key: str):
         """FastAPI WebSocket handler for JSON audio messages"""
         event_loop = asyncio.get_running_loop()
         close = False
@@ -400,7 +403,8 @@ class MeetingServerState(BaseServerState):
             
             # Create and subscribe to transcription pipeline
             pipeline = self.audioPipeline.create_pipeline(
-                mapQueue=clients,
+                key=key,
+                dictWebSocketQueue=clients,
                 loop=event_loop,
                 subject=self.audio_subject,
             )

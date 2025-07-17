@@ -1,64 +1,58 @@
-# Clean Server Architecture for Real-time Transcription & Diarization
+# Overview
+This project is used to implement a real time agent for multi-speaker environment base on an architecture we developped.
 
-This project provides a modular and clean implementation of a real-time audio processing server using `aiohttp`. It integrates:
 
-- Real-time audio transcription (Moshi)
-- Speaker diarization (DIART / PyAnnote)
-- Reactive pipelines (RxPY)
-- WebSocket interface
-- Modular design for scalability and maintenance
+# Architecture
 
----
 
-## 🧱 Project Structure
+# Use Cases
 
-```
-project_root/
-├── main.py               
-├── pipelines.py    # Reactive pipelines for audio processing
-├── serverState.py # Core server state management
-└── utils.py # Utility functions
 
-├── static/             # Optional UI assets (served by aiohttp)
-│
-├── requirements.txt
-└── README.md
-```
 
----
+## Quickstart / Installation
 
-## 🚀 Getting Started
+To get started, create a virtual environment and install the required packages by running the following commands:
 
-### 1. Clone & Install
 ```bash
-git clone <repo_url>
+# Create a virtual environment
+python3 -m venv venv
+
+# Activate the virtual environment
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+
+# Install the required packages
 pip install -r requirements.txt
 ```
 
-### 2. Run the Server
+
+## Run 
+### Server mode
+
 ```bash
-python -m main
+python main.py --mode online --port XXXX --host XXX.X.X.X
+```
+
+As we used mimi and did not want to focus on design, we used the already implemented moshi web interface. It stops after 10 seconds of inactivity sent to the server. 
+
+### Meeting mode (join in a meeting)
+
+First, change the meeting url and websocket url in **curl.sh**
+
+Then run the following command:
+```bash
+bash curl.sh
+
+python main.py --mode meeting --port XXXX --host XXX.X.X.X
 ```
 
 
-## 🛠️ Key Components
-
-- `ServerState` handles:
-  - Stream reading (Opus → PCM)
-  - Model inference (MIMI + Moshi)
-  - Reactive pipelines for diarization and transcription
-
-- RxPY operators chain streaming audio into async pipelines
-
-- Pyannote and Diart is used for speaker diarization in parallel
+## Roadmap
+- [ ] Implement the turn taking model using Mili-O 
 
 
-## ✅ TODOs
-- [ ] Add segmentation and embedding path to configuration and model loading.
-
----
-
-## 👥 Authors & License
+## License and Credits
 
 - **Author**: [Ludovic Maitre]
+
+- **Author**: [Léo Viguié]
 MIT License - 2025

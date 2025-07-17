@@ -3,7 +3,8 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 import torch
 from rx import operators as ops
-from utils import AudioChunk, MapQueue, ProcessedTokens, TimestampedText
+from transformers import RetriBertConfig
+from utils import AudioChunk, DictWebSocketQueue, ProcessedTokens, TimestampedText, build_message_to_server
 from moshi.client_utils import log
 from utils import tokens_to_timestamped_text
 import rx
@@ -54,6 +55,8 @@ class ASRPipeline(Pipeline):
         # self.model = FactCheckingModel(model_name)
         self.time = time.time()
         self.queue = deque(maxlen=10)  # Use deque for efficient FIFO queue
+        self.prompt = [] 
+
 
 
     def reset(self):
@@ -124,17 +127,32 @@ class ASRPipeline(Pipeline):
             log("error", f"Error processing tokens: {e}")
             return []
         
-    async def generate_text(self, key, prompt, mapQueue: MapQueue):
-        print(f"Generating text with prompt: {prompt[1]}")
+    def generate_text(self, key,loop = None, is_get =False, dictWebSocketQueue: DictWebSocketQueue = None):
         # res = self.model.call(prompt)
         # res = res[0]["generated_text"][-1]
         # log("info", f"Generated text: {res}")
         # msg = b"\x02" + bytes(res, encoding="utf8")
-        
-        await mapQueue.send_message( key,prompt[1]['content'])
         # return res
+        if (is_get == False):
+            print(f"Sending message with prompt: {self.prompt}")
+            asyncio.run_coroutine_threadsafe(self.send_message(key, dictWebSocketQueue), loop)
     
-    def build_prompt(self, key, mapQueue : MapQueue, loop, timed_text: List[TimestampedText]):
+        else:
+            if len(self.prompt) == 0:
+                return build_message_to_server("Attention", "Not enough data to generate text", "low", "")
+            else :
+                return build_message_to_server("Fact Checking", self.prompt[1]['content'], "low", "")
+            
+
+    async def send_message(self, key, dictWebSocketQueue: DictWebSocketQueue, ):
+        """Send a message to the map queue"""
+        if len(self.prompt) == 0:
+            await dictWebSocketQueue.send_message(key, build_message_to_server("Attention", "Not enough data to generate text", "low", ""))
+        else:
+            await dictWebSocketQueue.send_message( key,self.prompt[1]['content'])
+
+    
+    def build_prompt(self, key, dictWebSocketQueue : DictWebSocketQueue, loop, timed_text: List[TimestampedText]):
         """Build the prompt from the dialogue history"""
         if len(timed_text) <= len(self.transcription) or len(timed_text) <= 1:
             return
@@ -149,10 +167,10 @@ class ASRPipeline(Pipeline):
         if len(self.queue) >= self.queue.maxlen:
             old_text = " ".join(self.queue)
             self.queue.clear()
-            message = [{"role": "system", "content": prompt_fact_checking}, {"role": "user", "content": old_text}]
-            asyncio.run_coroutine_threadsafe(self.generate_text(key, message, mapQueue), loop)
+            self.prompt = [{"role": "system", "content": prompt_fact_checking}, {"role": "user", "content": old_text}]
+        
 
-    def create_pipeline(self, key, mapQueue : MapQueue, loop, subject):
+    def create_pipeline(self, key, dictWebSocketQueue : DictWebSocketQueue, loop, subject):
         """Create the reactive pipeline for online processing"""
         return (subject.pipe(
                 # Filter out None values and errors
@@ -166,7 +184,9 @@ class ASRPipeline(Pipeline):
                 # Filter out empty results
                 ops.filter(lambda x: len(x) > 0),
                 # Send transcription asynchronously
-                ops.do_action(lambda x: self.build_prompt(key,mapQueue, loop, x)),
+                ops.map(lambda x: self.build_prompt(key,dictWebSocketQueue, loop, x)),
+                # If a prompt is built, generate text in the results collector and in a separate coroutine
+                ops.do_action(lambda _: self.generate_text(key, dictWebSocketQueue, loop)),
                 # Handle errors gracefully
                 ops.catch(lambda e, source: rx.empty().pipe(
                     ops.do_action(lambda _: log("error", f"Pipeline error: {e}"))
@@ -211,6 +231,7 @@ class ASRPipeline(Pipeline):
             message = [{"role": "system", "content": prompt_fact_checking}, {"role": "user", "content": old_text}]
             return message
         return None
+
     def create_offline_pipeline(self, subject, results_collector):
         """Create the reactive pipeline for offline processing"""
         return (subject.pipe(
@@ -227,9 +248,9 @@ class ASRPipeline(Pipeline):
                 # Collect transcription results
                 # ops.do_action(lambda x: self.collect_transcription_offline(x, results_collector)),
                 # Build prompts for offline processing
-                ops.map(lambda x: self.build_prompt_offline(x, results_collector)),
+                ops.do_action(lambda x: self.build_prompt_offline(x, results_collector)),
                 # If a prompt is built, generate text in the results collector and in a separate coroutine
-                ops.do_action(lambda prompt: self.generate_text_offline(prompt, results_collector)),
+                ops.do_action(lambda prompt: self.generate_text(prompt, results_collector)),
                 # Handle errors gracefully
                 ops.catch(lambda e, source: rx.empty().pipe(
                     ops.do_action(lambda _: log("error", f"Pipeline error: {e}"))
