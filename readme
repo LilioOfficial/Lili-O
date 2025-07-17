@@ -1,13 +1,15 @@
 # Overview
-This project is used to implement a real time agent for multi-speaker environment base on an architecture we developped.
+# Lili-O Project
 
+This project implements a real-time agent for multi-speaker environments based on an architecture we developed.
 
-# Architecture
+## Architecture
 
+*(Add a brief description of the architecture here)*
 
-# Use Cases
+## Use Cases
 
-
+*(List the use cases for the project here)*
 
 ## Quickstart / Installation
 
@@ -24,35 +26,37 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 pip install -r requirements.txt
 ```
 
-
 ## Run 
-### Server mode
+
+### Server Mode
+
+To run the server, use the following command:
 
 ```bash
 python main.py --mode online --port XXXX --host XXX.X.X.X
 ```
 
-As we used mimi and did not want to focus on design, we used the already implemented moshi web interface. It stops after 10 seconds of inactivity sent to the server. 
+Note: We used Mimi and did not focus on design, so we utilized the already implemented Moshi web interface. The server stops after 10 seconds of inactivity.
 
-### Meeting mode (join in a meeting)
+### Meeting Mode (Join a Meeting)
 
-First, change the meeting url and websocket url in **curl.sh**
+1. First, change the meeting URL and WebSocket URL in `curl.sh`.
+2. Then run the following commands:
 
-Then run the following command:
 ```bash
 bash curl.sh
 
 python main.py --mode meeting --port XXXX --host XXX.X.X.X
 ```
 
-
 ## Roadmap
-- [ ] Implement the turn taking model using Mili-O 
 
+- [ ] Implement the turn-taking model using Mili-O 
 
 ## License and Credits
 
-- **Author**: [Ludovic Maitre]
+- **Authors**: 
+  - [Ludovic Maitre]
+  - [Léo Viguié]
 
-- **Author**: [Léo Viguié]
 MIT License - 2025
