@@ -1,6 +1,6 @@
 # Overview
 
-This project implements a real-time agent for multi-speaker environments based on an architecture we developed.
+This project implements a real-time agent for multi-speaker environments based on a ASR - DIAR - Turn-taking pipeline. The agent is designed to handle a conversation with multiple speakers, allowing for real-time interaction and processing. 
 
 ## Architecture
 
@@ -53,7 +53,7 @@ python main.py --mode meeting --port XXXX --host XXX.X.X.X
 ## License and Credits
 
 - **Authors**: 
-  - [Ludovic Maitre]
-  - [Léo Viguié]
+  - [Ludovic Maitre] : ludovik.maitre@gmail.com
+  - [Léo Viguié] : leoviguie91@gmail.com
 
 MIT License - 2025
