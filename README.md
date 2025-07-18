@@ -1,6 +1,8 @@
 # Overview
 
-This project implements a real-time agent for multi-speaker environments based on a ASR - DIAR - Turn-taking pipeline. The agent is designed to handle a conversation with multiple speakers, allowing for real-time interaction and processing. 
+This project implements a real-time agent for multi-speaker environments based on a ASR - DIAR - Turn-taking pipeline. The agent is designed to handle a conversation with multiple speakers, allowing for real-time interaction and processing.
+
+It's the genese of the project. There is still a lot to do, feel free to contribute!
 
 ## Architecture
 
@@ -46,10 +48,14 @@ python main.py --mode meeting --port XXXX --host XXX.X.X.X
 ```
 
 ## Roadmap
-- [x] Implement real time diar / ASR pipeline
+- [x] Implement ASR pipeline on RX subject
+- [x] Implement the DIAR pipeline on RX subject => well it works but we need to improve the performance
+- [ ] Create dataset for lili model training => see [Lili / Mili-O Hugging Face](https://huggingface.co/datasets/Lili-O/mili-o)
 - [ ] Implement the Lili model using the Transformer architecture
-- [ ] Implement the turn-taking model using Mili-
-
+- [ ] Implement the turn-taking model using Mili-O
+- [ ] add it to the pipeline
+- [ ] add the orchestrator to manage the different components of the pipeline + send the message to Big LLM
+  
 ## License and Credits
 
 - **Authors**: 
