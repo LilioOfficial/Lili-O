@@ -187,6 +187,8 @@ class DictWebSocketQueue:
     
     
 
+#This class is used to predict fact checking results based on the input messages.
+#As it is, it is not a complete implementation, but it serves as a template for future development.
 @dataclass
 class FactCheckingModel() : 
     def __init__(self, model_name):

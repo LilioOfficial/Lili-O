@@ -97,7 +97,6 @@ class BaseServerState(ABC):
         """Handle FastAPI WebSocket connections - must be implemented by subclasses"""
         pass
 
-
 @dataclass
 class OnlineServerState(BaseServerState):
     """Server state for real-time online processing with binary audio data"""
@@ -219,6 +218,8 @@ class OnlineServerState(BaseServerState):
                     pass  # WebSocket might already be closed
 
 
+# This is the base class for server states that handle different processing modes.
+# it was built before the refacto using DictWebSocketQueue 
 @dataclass
 class OfflineServerState(BaseServerState):
     """Server state for offline file-based processing"""

@@ -19,6 +19,7 @@ import diart.operators as dops
 from prompt import prompt_fact_checking
 import time
 from collections import deque
+from utils import FactCheckingModel
 
 class Pipeline(ABC):
     @abstractmethod
@@ -52,7 +53,7 @@ class ASRPipeline(Pipeline):
         self.n_prefix_chunks = math.ceil(self.audio_silence_prefix_seconds * mimi.frame_rate)
         self.text_tokens_accum = []
         self.transcription = []
-        # self.model = FactCheckingModel(model_name)
+        self.model = FactCheckingModel(model_name)
         self.time = time.time()
         self.queue = deque(maxlen=10)  # Use deque for efficient FIFO queue
         self.prompt = [] 
@@ -128,11 +129,15 @@ class ASRPipeline(Pipeline):
             return []
         
     def generate_text(self, key,loop = None, is_get =False, dictWebSocketQueue: DictWebSocketQueue = None):
-        # res = self.model.call(prompt)
-        # res = res[0]["generated_text"][-1]
-        # log("info", f"Generated text: {res}")
-        # msg = b"\x02" + bytes(res, encoding="utf8")
-        # return res
+        ''' 
+        Generate text from the prompt and send it to the WebSocket queue
+        For Speed debugging, we will not use the model for now
+        res = self.model.call(prompt)
+        res = res[0]["generated_text"][-1]
+        log("info", f"Generated text: {res}")
+        msg = b"\x02" + bytes(res, encoding="utf8")
+        return res '''
+        
         if (is_get == False):
             print(f"Sending message with prompt: {self.prompt}")
             asyncio.run_coroutine_threadsafe(self.send_message(key, dictWebSocketQueue), loop)
@@ -212,7 +217,7 @@ class ASRPipeline(Pipeline):
             return None
         # return res
 
-    def build_prompt_offline(self, timed_text: List[TimestampedText], results_collector):
+    def build_prompt_offline(self, timed_text: List[TimestampedText]):
         """Build the prompt from the dialogue history for offline processing
             Store the transcription in a list until the buffer is full or the end of the stream is reached.
         """
@@ -256,14 +261,16 @@ class ASRPipeline(Pipeline):
                     ops.do_action(lambda _: log("error", f"Pipeline error: {e}"))
                 ))
         ))
-
+    
+#TODO : Find a good diarization model for RT + finetune for french tone
+#TODO : Refacto the pipeline to use the websocket queue
 class DiarPipeline(Pipeline):
     def __init__(self):
         self.config = SpeakerDiarizationConfig(
             step=0.3,
             tau_active=0.9,
             segmentation=SegmentationModel.from_pyannote(
-                "../diarizers/lightning_logs/version_2/checkpoints/epoch=19-step=2940.ckpt"
+                "pyannote/segmentation",
             ),
             duration=3
         )

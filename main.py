@@ -3,11 +3,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-from dataclasses import dataclass
 import random
 import os
 import sys
-from time import sleep
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -44,23 +42,22 @@ def create_app(server_state):
     app = FastAPI(title="Audio Transcription Server")
     app.state.frontend_clients = DictWebSocketQueue()
 
+    ''' Configure CORS for the frontend extension, check the README for more info '''
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["chrome-extension://oidgmmmmdnkggpcolpbcckipoodendac"],  # ID de ton extension
+        allow_origins=["chrome-extension://oidgmmmmdnkggpcolpbcckipoodendac"],  
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-
     @app.websocket("/ws/frontend")
     async def frontend_ws(websocket: WebSocket, name: str = "frontend"):
         await websocket.accept()
-        frontend_clients = websocket.app.state.frontend_clients
+        frontend_clients : DictWebSocketQueue = websocket.app.state.frontend_clients
         print("🌐 Frontend connected")
         handshake_response = {"title": "handshake", "content": "ready", "fullDescription": name}
         await websocket.send_text(json.dumps(handshake_response))
-        #just test
         frontend_clients.add_key(name)
         frontend_clients.add_websocket(name, websocket)
         try:
@@ -70,6 +67,7 @@ def create_app(server_state):
             print("❎ Frontend disconnected")
             frontend_clients.dequeue(name, websocket)
     
+
     @app.websocket("/api/chat")
     async def websocket_endpoint(websocket: WebSocket):
         """WebSocket endpoint for audio transcription"""
@@ -82,6 +80,7 @@ def create_app(server_state):
         # Use the server state's handle_chat method adapted for FastAPI
         await server_state.handle_chat_fastapi(websocket, key="moshi", clients=frontend_clients )
     
+
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket, url: str = None):
         """WebSocket endpoint for audio transcription"""
@@ -102,7 +101,6 @@ def create_app(server_state):
         return {"prompt": abc}
 
 
-    
     @app.get("/")
     async def read_root():
         """Serve the main HTML page"""
